@@ -34,6 +34,7 @@ typedef bit<32> data_t;
 #include "include/int_sink.p4"
 #include "include/forward.p4"
 #include "include/port_forward.p4"
+#include "include/int_xd.p4"
 
 
 #ifdef BMV2
@@ -42,17 +43,23 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
 		if (!hdr.udp.isValid() && !hdr.tcp.isValid())
 			exit;
 
-		// in case of INT source port add main INT headers
-		Int_source.apply(hdr, meta, ig_intr_md);
+		 // Always capture ingress metadata — needed by both MD and XD
+    	meta.int_metadata.ingress_tstamp = (bit<64>)ig_intr_md.ingress_global_timestamp;
+    	meta.int_metadata.ingress_port   = (bit<16>)ig_intr_md.ingress_port;
 
-		// perform minimalistic L1 or L2 frame forwarding
-		// set egress_port for the frame
-		Forward.apply(hdr, meta, ig_intr_md);
-		PortForward.apply(hdr, meta, ig_intr_md);
+   		// Try XD first
+  		Int_xd_config.apply(hdr, meta, ig_intr_md);
 
-		// in case of sink node make packet clone I2E in order to create INT report
-		// which will be send to INT reporting port
-		Int_sink_config.apply(hdr, meta, ig_intr_md);
+    	// Only run MD source if XD didn't match this flow
+    	if (meta.int_metadata.xd_clone == 0) {
+        	Int_source.apply(hdr, meta, ig_intr_md);
+    }
+
+    	Forward.apply(hdr, meta, ig_intr_md);
+    	PortForward.apply(hdr, meta, ig_intr_md);
+
+    	// MD sink only fires if packet has INT headers
+    	Int_sink_config.apply(hdr, meta, ig_intr_md);
 	}
 }
 
@@ -62,6 +69,8 @@ control egress(inout headers hdr, inout metadata meta, inout standard_metadata_t
 		// in case of the INT sink port remove INT headers
 		// when frame duplicate on the INT report port then reformat frame into INT report frame
 		Int_sink.apply(hdr, meta, eg_intr_md);
+		// INT-XD: if this is an XD clone, build and emit the XD report
+		Int_xd_report.apply(hdr, meta, eg_intr_md);
 	}
 }
 

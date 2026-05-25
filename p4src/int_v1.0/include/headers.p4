@@ -161,6 +161,7 @@ header int_report_fixed_header_t {
 struct int_metadata_t {
     bit<1>  source;    // is INT source functionality enabled
     bit<1>  sink;        // is INT sink functionality enabled
+    bit<1>  xd_clone;   // Added for INT-XD: Set to 1 when this packet is an INT-XD clone
     bit<32> switch_id;  // INT switch id is configured by network controller
     bit<16> insert_byte_cnt;  // counter of inserted INT bytes
     bit<8>  int_hdr_word_len;  // counter of inserted INT words

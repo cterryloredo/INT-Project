@@ -9,4 +9,7 @@ table_add tb_forward send_to_port 00:00:00:00:01:01&&&0xFFFFFFFF => 2 11
 table_add tb_forward send_to_port 00:10:db:ff:10:02&&&0xFFFFFFFF => 5 0
 table_add tb_forward send_to_port 00:00:00:00:02:02&&&0xFFFFFFFF => 1 10
 
+mirroring_add 2 4
+table_add tb_int_xd_watchlist set_xd_clone 10.0.1.1&&&0xFFFFFFFF 10.0.2.2&&&0xFFFFFFFF 0x0&&&0x0 0x0&&&0x0 => 1
+table_add tb_int_xd_reporting send_xd_report => f6:61:c0:6a:00:01  10.0.0.2  f6:61:c0:6a:14:21  10.0.0.254  6001 2
 
