@@ -69,11 +69,11 @@ def start_int_collector(influxdb):
     # forward influx TCP connections to PSNC influx instance (not accessible directly from ns_int namespace where INT collector runs) 
     print("socat TCP-LISTEN:8086,fork TCP:%s" % influxdb)
     subprocess.Popen(
-        ['/usr/bin/socat','TCP-LISTEN:8086,fork','TCP:%s'%influxdb],
+        ['/usr/bin/socat','TCP-LISTEN:18086,fork','TCP:172.17.0.1:8086'],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
     )
     
-    collector_cmd = 'ip netns exec ns_int python3 /tmp/utils/int_collector_influx.py -i 6000 -H 192.168.0.1:8086 -d 0 &> /dev/null'
+    collector_cmd = 'ip netns exec ns_int python3 /tmp/utils/int_collector_influx.py -i 6000 -x 6001 -H 192.168.0.1:18086 -d 0 &> /dev/null'
     print(collector_cmd)
     os.system(collector_cmd)
     
