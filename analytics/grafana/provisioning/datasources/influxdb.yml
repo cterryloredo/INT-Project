@@ -1,0 +1,19 @@
+apiVersion: 1
+
+# INT-Project InfluxDB v2 (Flux) datasource.
+# Grafana reaches InfluxDB by compose service name on the shared network.
+datasources:
+  - name: InfluxDB-INT
+    uid: influxdb-int
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    isDefault: true
+    jsonData:
+      version: Flux
+      organization: int-project
+      defaultBucket: int_telemetry
+      tlsSkipVerify: true
+    secureJsonData:
+      token: my-super-secret-token
+    editable: true
