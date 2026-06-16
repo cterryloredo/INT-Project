@@ -13,7 +13,6 @@ datasources:
       version: Flux
       organization: int-project
       defaultBucket: int_telemetry
-      tlsSkipVerify: true
     secureJsonData:
       token: my-super-secret-token
     editable: true
