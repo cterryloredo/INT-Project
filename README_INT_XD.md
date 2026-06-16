@@ -90,6 +90,31 @@ mininet> h1 python3 -c "import socket; s=socket.socket(socket.AF_INET, socket.SO
 
 Any UDP or TCP packet from `10.0.1.1` to `10.0.2.2` triggers XD reporting on all three switches.
 
+### Seeing both INT modes (MD + XD) at the same time
+
+The data plane gives **INT-XD precedence per flow**: `int.p4` runs `Int_xd_config` before the MD source (`if (xd_clone == 0) Int_source.apply()`), so any flow matching the XD watchlist is exported by XD and is **never** MD-sourced. The two modes therefore run on **different flows**, not the same packets:
+
+| Mode | Flow | Mechanism |
+|---|---|---|
+| INT-XD | H1 → H2 (`10.0.1.1 → 10.0.2.2`) | XD watchlist on every switch; each switch exports its own per-hop report |
+| INT-MD | H2 → H1 (`10.0.2.2 → 10.0.1.1`) | MD source on S2 (`commands2.txt`); sink at S1 emits one end-to-end report |
+
+Generate traffic in **both directions** from the Mininet CLI using `sender.py`
+(`int.p4app/utils/sender.py`, available inside the container at `/tmp/utils/sender.py`;
+args: `<dst> <count> [src]`, paced at ~125 pps):
+
+```
+# INT-XD: H1 -> H2
+mininet> h1 python3 /tmp/utils/sender.py 10.0.2.2 500 10.0.1.1
+
+# INT-MD: H2 -> H1
+mininet> h2 python3 /tmp/utils/sender.py 10.0.1.1 500 10.0.2.2
+```
+
+In Grafana, the **"Reports received by mode"** panel then shows both `int_mode=MD` and `int_mode=XD` together; the XD panels populate per-switch and the MD panel shows the end-to-end path delay.
+
+> Traffic in only one direction shows only one mode. Keep the rate under ~500 pps (collector ceiling).
+
 ### 5 — View data in Grafana
 
 Open `http://localhost:3000` in your browser.
