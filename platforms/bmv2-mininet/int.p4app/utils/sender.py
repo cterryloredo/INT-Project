@@ -13,7 +13,10 @@ dst = sys.argv[1] if len(sys.argv) > 1 else '10.0.2.2'
 n   = int(sys.argv[2]) if len(sys.argv) > 2 else 400
 src = sys.argv[3] if len(sys.argv) > 3 else '10.0.1.1'
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-s.bind((src, 4000))
+try:
+    s.bind((src, 4000))
+except OSError:
+    s.bind((src, 0))
 for _ in range(n):
     s.sendto(b'inttest', (dst, 5000))
     time.sleep(0.008)          # ~125 pps, under the 500 pps ceiling
