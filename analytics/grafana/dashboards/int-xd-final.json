@@ -1,0 +1,272 @@
+{
+  "uid": "int-md-xd",
+  "title": "INT Telemetry — MD vs XD",
+  "tags": ["int", "p4", "telemetry"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 7,
+  "refresh": "5s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": { "list": [] },
+  "annotations": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "bargauge",
+      "title": "INT-XD — mean hop latency per switch (relative)",
+      "description": "INT-XD per-switch in-switch latency = egress_tstamp - ingress_tstamp, averaged over the range. Every on-path switch exports independently. Host-clock derived (BMv2) -> relative (not absolute network delay). The raw INT hop_delay field unusable on BMv2 (constant ~1.92 s), so latency is computed from the captured timestamps.",
+      "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "ns", "displayName": "Switch ${__field.labels.switch_id}", "color": { "mode": "palette-classic" } }, "overrides": [] },
+      "options": { "displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+          "query": "from(bucket: \"int-xd\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"int_telemetry\" and r.int_mode == \"XD\" and (r._field == \"ingress_tstamp\" or r._field == \"egress_tstamp\"))\n  |> pivot(rowKey: [\"_time\", \"switch_id\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({ r with _value: r.egress_tstamp - r.ingress_tstamp }))\n  |> group(columns: [\"switch_id\"])\n  |> mean()\n  |> keep(columns: [\"switch_id\", \"_value\"])"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "bargauge",
+      "title": "INT-XD — max queue occupancy per switch",
+      "description": "INT-XD per-switch q_occupancy (max over range). Idle emulation → expected 0; rises only under congestion.",
+      "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short", "displayName": "Switch ${__field.labels.switch_id}", "color": { "mode": "palette-classic" } }, "overrides": [] },
+      "options": { "displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+          "query": "from(bucket: \"int-xd\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"int_telemetry\" and r.int_mode == \"XD\" and r._field == \"q_occupancy\")\n  |> group(columns: [\"switch_id\"])\n  |> max()\n  |> keep(columns: [\"switch_id\", \"_value\"])"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Reports received by mode (current range)",
+      "description": "Count of reports (seq field) per int_mode — MD and XD volume side by side. XD = one report per on-path switch per packet; MD = one end-to-end report per packet at the sink.",
+      "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short", "displayName": "${__field.labels.int_mode}", "color": { "mode": "palette-classic" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "orientation": "horizontal", "textMode": "value_and_name", "colorMode": "background" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+          "query": "from(bucket: \"int-xd\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"int_telemetry\" and r._field == \"seq\")\n  |> group(columns: [\"int_mode\"])\n  |> count()\n  |> keep(columns: [\"int_mode\", \"_value\"])"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "INT-XD — hop latency per switch (relative, live)",
+      "description": "Same per-switch computed latency as the bar gauge, over time. Needs continuous traffic to show width; short burst appears as a single spike.",
+      "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "ns", "displayName": "Switch ${__field.labels.switch_id}", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10, "showPoints": "auto", "spanNulls": true } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+          "query": "from(bucket: \"int-xd\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"int_telemetry\" and r.int_mode == \"XD\" and (r._field == \"ingress_tstamp\" or r._field == \"egress_tstamp\"))\n  |> pivot(rowKey: [\"_time\", \"switch_id\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({ r with _value: r.egress_tstamp - r.ingress_tstamp }))\n  |> group(columns: [\"switch_id\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"switch_id\"])"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "INT-MD — end-to-end path delay (live)",
+      "description": "INT-MD end-to-end delay computed at the sink across the whole path (the 'delay' field). MD's distinctive output — XD has no end-to-end (reports per switch). Host-clock derived -> relative.",
+      "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "ns", "displayName": "MD e2e path delay", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10, "showPoints": "auto", "spanNulls": true } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+          "query": "from(bucket: \"int-xd\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"int_telemetry\" and r.int_mode == \"MD\" and r._field == \"delay\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\"])"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "text",
+      "title": "In-depth — throughput, loss & latency",
+      "gridPos": { "h": 3, "w": 24, "x": 0, "y": 17 },
+      "options": { "mode": "markdown", "content": "**INT-XD scaling story.** Report rate tracks offered load (e.g. 41 → 416 pps). Hop latency stays flat and queue occupancy ~0 → the switch is far from saturation; report loss seen here is collector-side, not switch congestion. `seq` is a single global per-report counter on the switch, so gaps in arrival order = dropped reports between switch and collector." }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "INT-XD — report rate per switch (reports/s)",
+      "description": "Reports/s per switch_id = count of reports per window / window seconds. Should scale ~linearly with offered packet rate; proves the pipeline keeps up.",
+      "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "displayName": "Switch ${__field.labels.switch_id}", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 15, "showPoints": "never", "spanNulls": true } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+          "query": "from(bucket: \"int-xd\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"int_telemetry\" and r.int_mode == \"XD\" and r._field == \"seq\")\n  |> group(columns: [\"switch_id\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: count, createEmpty: false)\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) / (float(v: int(v: v.windowPeriod)) / 1000000000.0) }))\n  |> keep(columns: [\"_time\", \"_value\", \"switch_id\"])"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "INT-XD — dropped reports (seq gaps, global)",
+      "description": "Estimated lost reports per window from gaps in the global seq counter (consecutive arrival delta - 1, summed). 0 = no loss. Rises if the collector can't keep up with the report rate.",
+      "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "fieldConfig": { "defaults": { "unit": "short", "displayName": "dropped reports", "custom": { "drawStyle": "bars", "lineWidth": 1, "fillOpacity": 60, "showPoints": "never" }, "color": { "fixedColor": "red", "mode": "fixed" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["sum"] }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+          "query": "from(bucket: \"int-xd\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"int_telemetry\" and r.int_mode == \"XD\" and r._field == \"seq\")\n  |> group()\n  |> sort(columns: [\"_time\"])\n  |> difference(nonNegative: false)\n  |> map(fn: (r) => ({ r with _value: if r._value > 1.0 then r._value - 1.0 else 0.0 }))\n  |> aggregateWindow(every: v.windowPeriod, fn: sum, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\"])"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "INT-XD — hop latency percentiles (all switches)",
+      "description": "p50 / p95 / p99 of per-switch hop latency (egress_tstamp - ingress_tstamp) across all switches. Flat tails under rising load = no congestion; a growing p99 would signal queueing.",
+      "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
+      "fieldConfig": { "defaults": { "unit": "ns", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5, "showPoints": "never", "spanNulls": true } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+          "query": "from(bucket: \"int-xd\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"int_telemetry\" and r.int_mode == \"XD\" and (r._field == \"ingress_tstamp\" or r._field == \"egress_tstamp\"))\n  |> pivot(rowKey: [\"_time\", \"switch_id\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({ r with _value: r.egress_tstamp - r.ingress_tstamp }))\n  |> group()\n  |> aggregateWindow(every: v.windowPeriod, fn: (tables=<-, column) => tables |> quantile(q: 0.50), createEmpty: false)\n  |> set(key: \"_field\", value: \"p50\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+          "query": "from(bucket: \"int-xd\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"int_telemetry\" and r.int_mode == \"XD\" and (r._field == \"ingress_tstamp\" or r._field == \"egress_tstamp\"))\n  |> pivot(rowKey: [\"_time\", \"switch_id\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({ r with _value: r.egress_tstamp - r.ingress_tstamp }))\n  |> group()\n  |> aggregateWindow(every: v.windowPeriod, fn: (tables=<-, column) => tables |> quantile(q: 0.95), createEmpty: false)\n  |> set(key: \"_field\", value: \"p95\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+        },
+        {
+          "refId": "C",
+          "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+          "query": "from(bucket: \"int-xd\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"int_telemetry\" and r.int_mode == \"XD\" and (r._field == \"ingress_tstamp\" or r._field == \"egress_tstamp\"))\n  |> pivot(rowKey: [\"_time\", \"switch_id\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({ r with _value: r.egress_tstamp - r.ingress_tstamp }))\n  |> group()\n  |> aggregateWindow(every: v.windowPeriod, fn: (tables=<-, column) => tables |> quantile(q: 0.99), createEmpty: false)\n  |> set(key: \"_field\", value: \"p99\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "INT-XD — latency stats per switch (ns)",
+      "description": "Per-switch mean hop latency + report count over the range. Computed cheaply as mean(egress_tstamp) - mean(ingress_tstamp) (exact by linearity, no per-point pivot), so it renders under high volume. Mean shows the fixed per-port offset (switch 1 higher); see the percentiles panel for tail/max.",
+      "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
+      "fieldConfig": { "defaults": { "custom": { "align": "auto" } }, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+          "query": "mean_lat = from(bucket: \"int-xd\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"int_telemetry\" and r.int_mode == \"XD\" and (r._field == \"ingress_tstamp\" or r._field == \"egress_tstamp\"))\n  |> group(columns: [\"switch_id\", \"_field\"])\n  |> mean()\n  |> pivot(rowKey: [\"switch_id\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({ switch_id: r.switch_id, _field: \"mean_ns\", _value: r.egress_tstamp - r.ingress_tstamp }))\n  |> group()\n\nreports = from(bucket: \"int-xd\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"int_telemetry\" and r.int_mode == \"XD\" and r._field == \"egress_tstamp\")\n  |> group(columns: [\"switch_id\"])\n  |> count()\n  |> map(fn: (r) => ({ switch_id: r.switch_id, _field: \"reports\", _value: float(v: r._value) }))\n  |> group()\n\nunion(tables: [mean_lat, reports])\n  |> pivot(rowKey: [\"switch_id\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "INT-XD — queue occupancy per switch (live)",
+      "description": "Per-switch q_occupancy over time. Stays ~0 at these rates (no congestion); plot it next to latency to show that flat latency == empty queues.",
+      "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
+      "fieldConfig": { "defaults": { "unit": "short", "displayName": "Switch ${__field.labels.switch_id}", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10, "showPoints": "auto", "spanNulls": true } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["max"] }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+          "query": "from(bucket: \"int-xd\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"int_telemetry\" and r.int_mode == \"XD\" and r._field == \"q_occupancy\")\n  |> group(columns: [\"switch_id\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: max, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"switch_id\"])"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "table",
+      "title": "INT-XD — reports per flow",
+      "description": "Report count grouped by inner flow (srcip -> dstip). Shows which monitored flows are generating telemetry and their relative volume.",
+      "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 36 },
+      "fieldConfig": { "defaults": { "custom": { "align": "auto" } }, "overrides": [ { "matcher": { "id": "byName", "options": "_value" }, "properties": [ { "id": "displayName", "value": "reports" } ] } ] },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+          "query": "from(bucket: \"int-xd\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"int_telemetry\" and r.int_mode == \"XD\" and r._field == \"seq\")\n  |> group(columns: [\"srcip\", \"dstip\"])\n  |> count()\n  |> keep(columns: [\"srcip\", \"dstip\", \"_value\"])\n  |> group()"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "INT-XD — total report rate (from seq, accurate)",
+      "description": "True total reports/s = derivative of the global monotonic seq counter. Immune to count-window quantization and to InfluxDB point overwrites, so it's smooth where the per-switch count panel is jagged. seq is chip-wide, so this is the TOTAL across all switches.",
+      "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 44 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "displayName": "total reports/s", "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 15, "showPoints": "never", "spanNulls": true }, "color": { "fixedColor": "green", "mode": "fixed" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+          "query": "from(bucket: \"int-xd\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"int_telemetry\" and r.int_mode == \"XD\" and r._field == \"seq\")\n  |> group()\n  |> aggregateWindow(every: v.windowPeriod, fn: max, createEmpty: false)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> keep(columns: [\"_time\", \"_value\"])"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "INT-XD — inter-arrival per switch (Δ ingress_tstamp)",
+      "description": "Time between consecutive packets as seen by the switch hardware = difference of ingress_tstamp per switch. This is the real offered-load pacing (416 pps ~ 2.4 ms, 4k pps ~ 250 us). Legend stdDev = arrival jitter. On Tofino this is ns-precise; on BMv2 it carries host-OS scheduling noise. Note: drops inflate gaps, so read it at rates with ~0 loss.",
+      "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 52 },
+      "fieldConfig": { "defaults": { "unit": "ns", "displayName": "Switch ${__field.labels.switch_id}", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10, "showPoints": "auto", "spanNulls": true } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "stdDev", "max"] }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+          "query": "from(bucket: \"int-xd\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"int_telemetry\" and r.int_mode == \"XD\" and r._field == \"ingress_tstamp\")\n  |> group(columns: [\"switch_id\"])\n  |> sort(columns: [\"_time\"])\n  |> difference(nonNegative: true)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"switch_id\"])"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Hardware vs software — mean hop latency by platform",
+      "description": "Mean in-switch latency (egress_tstamp - ingress_tstamp) grouped by the 'platform' tag. Run the same flow on Tofino (platform=tofino, ns-precise, ~300 ns, flat) and BMv2/Mininet (platform=bmv2, host-clock, larger + noisy). The core HW-vs-SW timestamp story in one panel.",
+      "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 52 },
+      "fieldConfig": { "defaults": { "unit": "ns", "displayName": "${__field.labels.platform}", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10, "showPoints": "auto", "spanNulls": true } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "stdDev"] }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb-int" },
+          "query": "from(bucket: \"int-xd\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"int_telemetry\" and r.int_mode == \"XD\" and (r._field == \"ingress_tstamp\" or r._field == \"egress_tstamp\"))\n  |> filter(fn: (r) => exists r.platform)\n  |> pivot(rowKey: [\"_time\", \"switch_id\", \"platform\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({ r with _value: r.egress_tstamp - r.ingress_tstamp }))\n  |> group(columns: [\"platform\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"platform\"])"
+        }
+      ]
+    }
+  ]
+}
+
